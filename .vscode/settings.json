@@ -188,10 +188,12 @@
   ],
 
   "github.copilot.enable": {
-    "*": true,
-    "markdown": true,
+    "*": false,
     "plaintext": false,
-    "yaml": false
+    "markdown": true,
+    "scminput": false,
+    "yaml": false,
+    "typescript": false
   },
 
   "cssVariables.lookupFiles": ["packages/core/base/design/src/**/*.css"],
@@ -237,5 +239,6 @@
     "nolebase",
     "rollup",
     "vitest"
-  ]
+  ],
+  "Codegeex.RepoIndex": true
 }
