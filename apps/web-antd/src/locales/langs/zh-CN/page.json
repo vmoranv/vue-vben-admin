@@ -7,8 +7,71 @@
     "forgetPassword": "忘记密码"
   },
   "dashboard": {
-    "title": "概览",
-    "analytics": "分析页",
+    "title": "仪表盘",
+    "analytics": "数据分析",
     "workspace": "工作台"
+  },
+  "member": {
+    "title": "会员管理",
+    "list": "会员列表",
+    "create": "创建会员",
+    "checkin": "会员签到"
+  },
+  "course": {
+    "index": "课程列表",
+    "title": "课程管理",
+    "list": "课程列表",
+    "create": "创建课程",
+    "bookings": "课程预约",
+    "edit": "编辑课程"
+  },
+  "equipment": {
+    "title": "设备管理",
+    "list": "设备列表",
+    "create": "创建设备",
+    "edit": "编辑设备",
+    "maintenance": "设备维护"
+  },
+  "financial": {
+    "title": "财务管理",
+    "index": "财务概览",
+    "stats": "财务统计",
+    "create": "创建财务记录",
+    "edit": "编辑财务记录",
+    "startDate": "开始日期",
+    "endDate": "结束日期",
+    "granularity": "统计粒度",
+    "query": "查询",
+    "income": "收入",
+    "expense": "支出",
+    "profit": "利润",
+    "daily": "按日",
+    "weekly": "按周",
+    "monthly": "按月",
+    "yearly": "按年",
+    "date": "日期",
+    "startDatePlaceholder": "请选择开始日期",
+    "endDatePlaceholder": "请选择结束日期",
+    "totalIncome": "总收入",
+    "totalExpense": "总支出",
+    "totalProfit": "总利润",
+    "profitMargin": "利润率"
+  },
+  "staff": {
+    "title": "人员管理",
+    "list": "人员列表",
+    "create": "创建人员",
+    "edit": "编辑人员",
+    "info": "人员信息",
+    "role": {
+      "admin": "超级管理员",
+      "manager": "管理员",
+      "coach": "教练",
+      "reception": "前台"
+    },
+    "status": {
+      "active": "活跃",
+      "inactive": "停用" 
+    }
   }
 }

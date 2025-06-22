@@ -36,16 +36,13 @@ const prisma = new PrismaClient({
 // 测试数据库连接
 const testConnection = async () => {
   try {
-    // 尝试连接数据库
     await prisma.$connect();
 
-    // 执行测试查询
     const result = await prisma.$queryRaw<
       CurrentTimeResult[]
     >`SELECT NOW() as current_time`;
     console.warn('当前数据库时间：', result[0]?.current_time);
 
-    // 检查数据库表是否存在
     const tableCount = await prisma.$queryRaw<TableCountResult[]>`
       SELECT COUNT(*) as table_count 
       FROM information_schema.tables 
@@ -54,7 +51,6 @@ const testConnection = async () => {
     const count = Number(tableCount[0]?.table_count);
     console.warn('数据库表数量：', count);
 
-    // 如果没有表，提供详细的解决方案
     if (count === 0) {
       console.warn('数据库中没有表，请执行以下步骤：');
       console.warn('1. 生成客户端代码: npx prisma generate');
@@ -69,19 +65,15 @@ const testConnection = async () => {
   }
 };
 
-// 延迟执行连接测试，给应用启动一些时间
 setTimeout(testConnection, 1000);
 
-// 优雅关闭处理
 const gracefulShutdown = async () => {
   await prisma.$disconnect();
 };
 
-// 监听进程退出信号
 process.on('SIGINT', gracefulShutdown);
 process.on('SIGTERM', gracefulShutdown);
 process.on('beforeExit', gracefulShutdown);
 
-// 导出 Prisma Client 实例
 export default prisma;
 export { prisma };

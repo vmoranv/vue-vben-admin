@@ -11,6 +11,7 @@ import courseRoutes from './routes/course-routes';
 import equipmentRoutes from './routes/equipment-routes';
 import financialRoutes from './routes/financial-routes';
 import memberRoutes from './routes/member-routes';
+import staffRoutes from './routes/staff-routes';
 
 // 加载环境变量
 dotenv.config({ path: '.env.development.local' });
@@ -36,6 +37,7 @@ app.use('/api/members', memberRoutes);
 app.use('/api/equipment', equipmentRoutes);
 app.use('/api/courses', courseRoutes);
 app.use('/api/financial', financialRoutes);
+app.use('/api/staff', staffRoutes);
 
 // 404处理
 app.use((req, res) => {
@@ -52,7 +54,7 @@ app.use(
     err: any,
     req: express.Request,
     res: express.Response,
-    _next: express.NextFunction,
+    next: express.NextFunction,
   ) => {
     console.error('全局错误:', err);
     res.status(500).json({

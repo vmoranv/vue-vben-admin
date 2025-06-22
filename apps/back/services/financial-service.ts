@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 
 import prisma from '../utils/db';
+import { Prisma } from '@prisma/client';
 
 // 获取财务记录列表
 export async function getFinancialRecords(req: Request, res: Response) {
@@ -15,86 +16,84 @@ export async function getFinancialRecords(req: Request, res: Response) {
       end_date,
     } = req.query;
 
-    // 构建查询条件
-    const queryParams: any[] = [];
-    const conditions = [];
-    let paramIndex = 1;
+    // 构建 WHERE 条件对象
+    const whereConditions: any = {};
 
     if (record_type) {
-      conditions.push(`f.record_type = $${paramIndex}`);
-      queryParams.push(record_type);
-      paramIndex++;
+      whereConditions.recordType = record_type;
     }
 
     if (member_id) {
-      conditions.push(`f.member_id = $${paramIndex}`);
-      queryParams.push(member_id);
-      paramIndex++;
+      whereConditions.memberId = Number(member_id);
     }
 
     if (coach_id) {
-      conditions.push(`f.coach_id = $${paramIndex}`);
-      queryParams.push(coach_id);
-      paramIndex++;
+      whereConditions.coachId = Number(coach_id);
     }
 
-    if (start_date) {
-      conditions.push(`f.record_date >= $${paramIndex}`);
-      queryParams.push(start_date);
-      paramIndex++;
+    if (start_date || end_date) {
+      whereConditions.recordDate = {};
+      if (start_date) {
+        whereConditions.recordDate.gte = new Date(start_date as string);
+      }
+      if (end_date) {
+        whereConditions.recordDate.lte = new Date(end_date as string);
+      }
     }
-
-    if (end_date) {
-      conditions.push(`f.record_date <= $${paramIndex}`);
-      queryParams.push(end_date);
-      paramIndex++;
-    }
-
-    // 构建WHERE子句
-    const whereClause =
-      conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
     // 计算总记录数
-    const countQuery = `
-      SELECT COUNT(*) as count
-      FROM financial_records f
-      ${whereClause}
-    `;
-    const countResult = await prisma.$queryRaw<
-      [{ count: bigint }]
-    >`${countQuery}`;
-    const total = Number(countResult[0].count);
+    const total = await prisma.financialRecord.count({
+      where: whereConditions,
+    });
+
+    // 计算分页参数
+    const offset = (Number(page) - 1) * Number(pageSize);
 
     // 查询分页数据
-    const offset = (Number(page) - 1) * Number(pageSize);
-    const _paginationParams = [...queryParams, Number(pageSize), offset];
+    const result = await prisma.financialRecord.findMany({
+      where: whereConditions,
+      include: {
+        member: true,
+        coach: true,
+        operator: true,
+      },
+      orderBy: [
+        { recordDate: 'desc' },
+        { createdAt: 'desc' },
+      ],
+      skip: offset,
+      take: Number(pageSize),
+    });
 
-    const query = `
-      SELECT 
-        f.*,
-        m.name as member_name,
-        c.real_name as coach_name,
-        o.real_name as operator_name
-      FROM 
-        financial_records f
-      LEFT JOIN 
-        members m ON f.member_id = m.id
-      LEFT JOIN 
-        users c ON f.coach_id = c.id
-      LEFT JOIN 
-        users o ON f.operator_id = o.id
-      ${whereClause}
-      ORDER BY f.record_date DESC, f.created_at DESC
-      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
-    `;
-
-    const result = await prisma.$queryRaw<any[]>`${query}`;
-
+    // 格式化结果
+    const formattedResult = result.map((record: any) => ({
+      id: record.id,
+      recordType: record.recordType,
+      record_type: record.recordType,
+      amount: parseFloat(record.amount) || 0,
+      recordDate: record.recordDate,
+      record_date: record.recordDate,
+      paymentMethod: record.paymentMethod || null,
+      payment_method: record.paymentMethod || null,
+      description: record.description,
+      member_name: record.member?.name || null,
+      coachId: record.coachId,
+      coach_id: record.coachId,
+      coach_name: record.coach?.realName || null,
+      operatorId: record.operatorId,
+      operator_name: record.operator?.realName || null,
+      createdAt: record.createdAt,
+      created_at: record.createdAt,
+      updatedAt: record.updatedAt,
+      updated_at: record.updatedAt,
+    }));
+    
     return res.status(200).json({
       code: 0,
       message: '获取财务记录成功',
       data: {
-        list: result,
+        items: formattedResult,
+        total,
         pagination: {
           current: Number(page),
           pageSize: Number(pageSize),
@@ -115,7 +114,7 @@ export async function getFinancialRecords(req: Request, res: Response) {
 // 添加会员费收入记录
 export async function addMembershipFee(req: Request, res: Response) {
   try {
-    const { member_id, amount, record_date, description } = req.body;
+    const { member_id, amount, record_date, description, payment_method } = req.body;
     const operatorId = req.user?.id;
 
     if (!member_id || !amount || !record_date) {
@@ -126,7 +125,6 @@ export async function addMembershipFee(req: Request, res: Response) {
       });
     }
 
-    // 检查会员是否存在
     const memberCheck = await prisma.$queryRaw<any[]>`
       SELECT id, expire_date FROM members WHERE id = ${member_id}
     `;
@@ -139,24 +137,20 @@ export async function addMembershipFee(req: Request, res: Response) {
       });
     }
 
-    // 使用事务处理
     const result = await prisma.$transaction(async (tx) => {
-      // 添加财务记录
       const financialResult = await tx.$queryRaw<any[]>`
         INSERT INTO financial_records (
           record_type, amount, member_id, record_date,
-          description, operator_id
-        ) VALUES (${`会员费`}, ${amount}, ${member_id}, ${record_date}, ${description}, ${operatorId}) 
+          description, payment_method, operator_id
+        ) VALUES (${`会员费`}, ${amount}, ${member_id}, ${record_date}, ${description}, ${payment_method || null}, ${operatorId}) 
         RETURNING *
       `;
 
-      // 更新会员的到期日期
       const member = memberCheck[0];
       const newExpireDate = new Date(
         Math.max(new Date(member.expire_date).getTime(), Date.now()),
       );
 
-      // 按金额自动延长会员期限（每100元延长1个月）
       const monthsToAdd = Math.floor(Number(amount) / 100);
       newExpireDate.setMonth(newExpireDate.getMonth() + monthsToAdd);
 
@@ -191,7 +185,7 @@ export async function addMembershipFee(req: Request, res: Response) {
 // 添加私教费收入记录
 export async function addCoachingFee(req: Request, res: Response) {
   try {
-    const { member_id, coach_id, amount, record_date, description } = req.body;
+    const { member_id, coach_id, amount, record_date, description, payment_method } = req.body;
     const operatorId = req.user?.id;
 
     if (!member_id || !coach_id || !amount || !record_date) {
@@ -202,7 +196,6 @@ export async function addCoachingFee(req: Request, res: Response) {
       });
     }
 
-    // 检查会员是否存在
     const memberCheck = await prisma.$queryRaw<any[]>`
       SELECT id FROM members WHERE id = ${member_id}
     `;
@@ -215,7 +208,6 @@ export async function addCoachingFee(req: Request, res: Response) {
       });
     }
 
-    // 检查教练是否存在
     const coachCheck = await prisma.$queryRaw<any[]>`
       SELECT id FROM users WHERE id = ${coach_id} AND role_id = (SELECT id FROM roles WHERE name = ${'coach'})
     `;
@@ -228,12 +220,11 @@ export async function addCoachingFee(req: Request, res: Response) {
       });
     }
 
-    // 添加财务记录
     const result = await prisma.$queryRaw<any[]>`
       INSERT INTO financial_records (
         record_type, amount, member_id, coach_id,
-        record_date, description, operator_id
-      ) VALUES (${`私教费`}, ${amount}, ${member_id}, ${coach_id}, ${record_date}, ${description}, ${operatorId}) 
+        record_date, description, payment_method, operator_id
+      ) VALUES (${`私教费`}, ${amount}, ${member_id}, ${coach_id}, ${record_date}, ${description}, ${payment_method || null}, ${operatorId}) 
       RETURNING *
     `;
 
@@ -255,7 +246,7 @@ export async function addCoachingFee(req: Request, res: Response) {
 // 添加其他收入/支出记录
 export async function addOtherFinancialRecord(req: Request, res: Response) {
   try {
-    const { record_type, amount, record_date, description } = req.body;
+    const { record_type, amount, record_date, description, payment_method } = req.body;
     const operatorId = req.user?.id;
 
     if (!record_type || !amount || !record_date) {
@@ -277,8 +268,8 @@ export async function addOtherFinancialRecord(req: Request, res: Response) {
     const result = await prisma.$queryRaw<any[]>`
       INSERT INTO financial_records (
         record_type, amount, record_date,
-        description, operator_id
-      ) VALUES (${record_type}, ${amount}, ${record_date}, ${description}, ${operatorId}) 
+        description, payment_method, operator_id
+      ) VALUES (${record_type}, ${amount}, ${record_date}, ${description}, ${payment_method || null}, ${operatorId}) 
       RETURNING *
     `;
 
@@ -300,16 +291,23 @@ export async function addOtherFinancialRecord(req: Request, res: Response) {
 // 获取财务统计报表
 export async function getFinancialStats(req: Request, res: Response) {
   try {
-    const { start_date, end_date, group_by = 'day' } = req.query;
+    interface FinancialStatsTotal {
+      total_membership_income: number;
+      total_coaching_income: number;
+      total_other_income: number;
+      total_expense: number;
+      total_profit: number;
+    }
+
+    const { time_unit, start_date, end_date } = req.query;
 
     let timeFormat = '';
     let groupByClause = '';
 
-    // 根据分组方式设置日期格式和分组子句
-    if (group_by === 'month') {
+    if (time_unit === 'month') {
       timeFormat = 'YYYY-MM';
       groupByClause = `TO_CHAR(record_date, 'YYYY-MM')`;
-    } else if (group_by === 'year') {
+    } else if (time_unit === 'year') {
       timeFormat = 'YYYY';
       groupByClause = `TO_CHAR(record_date, 'YYYY')`;
     } else {
@@ -317,25 +315,19 @@ export async function getFinancialStats(req: Request, res: Response) {
       groupByClause = `TO_CHAR(record_date, 'YYYY-MM-DD')`;
     }
 
-    let whereClause = '';
-    const queryParams: any[] = [];
-    let paramIndex = 1;
-
+    let whereCondition = Prisma.sql`WHERE 1=1`;
+    
     if (start_date) {
-      whereClause += ` AND record_date >= $${paramIndex}`;
-      queryParams.push(start_date);
-      paramIndex++;
+      whereCondition = Prisma.sql`${whereCondition} AND record_date >= ${start_date}`;
     }
 
     if (end_date) {
-      whereClause += ` AND record_date <= $${paramIndex}`;
-      queryParams.push(end_date);
-      paramIndex++;
+      whereCondition = Prisma.sql`${whereCondition} AND record_date <= ${end_date}`;
     }
 
-    const query = `
+    const query = Prisma.sql`
       SELECT 
-        ${groupByClause} as time_period,
+        ${Prisma.raw(groupByClause)} as time_period,
         SUM(CASE WHEN record_type = '会员费' THEN amount ELSE 0 END) as membership_income,
         SUM(CASE WHEN record_type = '私教费' THEN amount ELSE 0 END) as coaching_income,
         SUM(CASE WHEN record_type = '其他收入' THEN amount ELSE 0 END) as other_income,
@@ -344,20 +336,16 @@ export async function getFinancialStats(req: Request, res: Response) {
         SUM(CASE WHEN record_type = '支出' THEN amount ELSE 0 END) as profit
       FROM 
         financial_records
-      WHERE 
-        1=1
-        ${whereClause}
+      ${whereCondition}
       GROUP BY 
-        ${groupByClause}
+        ${Prisma.raw(groupByClause)}
       ORDER BY 
         time_period
     `;
 
-    // 🔧 修复：使用 prisma.$queryRaw 替代 pool.query
-    const result = await prisma.$queryRaw<any[]>`${query}`;
+    const result = await prisma.$queryRaw(query);
 
-    // 计算总计
-    const totalQuery = `
+    const totalQuery = Prisma.sql`
       SELECT 
         SUM(CASE WHEN record_type = '会员费' THEN amount ELSE 0 END) as total_membership_income,
         SUM(CASE WHEN record_type = '私教费' THEN amount ELSE 0 END) as total_coaching_income,
@@ -367,25 +355,251 @@ export async function getFinancialStats(req: Request, res: Response) {
         SUM(CASE WHEN record_type = '支出' THEN amount ELSE 0 END) as total_profit
       FROM 
         financial_records
-      WHERE 
-        1=1
-        ${whereClause}
+      ${whereCondition}
     `;
 
-    // 🔧 修复：使用 prisma.$queryRaw 替代 pool.query
-    const totalResult = await prisma.$queryRaw<any[]>`${totalQuery}`;
-
+    const totalResult = await prisma.$queryRaw<FinancialStatsTotal[]>(totalQuery);
+    
     return res.status(200).json({
       code: 0,
       message: '获取财务统计成功',
       data: {
         list: result,
-        total: totalResult[0], // 注意：移除 .rows，直接使用数组元素
+        total: totalResult[0],
         time_format: timeFormat,
       },
     });
   } catch (error) {
     console.error('获取财务统计失败：', error);
+    return res.status(500).json({
+      code: 500,
+      message: '服务器错误',
+      data: null,
+    });
+  }
+}
+
+// 创建财务记录
+export async function createFinancialRecord(req: Request, res: Response) {
+  try {
+    const {
+      record_type,
+      amount,
+      record_date,
+      member_id,
+      coach_id,
+      description,
+      payment_method,
+    } = req.body;
+
+
+    if (!record_type || !amount || !record_date) {
+      return res.status(400).json({
+        code: 400,
+        message: '记录类型、金额和记录日期为必填项',
+        data: null,
+      });
+    }
+
+    const financialRecord = await prisma.financialRecord.create({
+      data: {
+        recordType: record_type,
+        amount: parseFloat(amount),
+        recordDate: new Date(record_date),
+        description: description || null,
+        paymentMethod: payment_method || null,
+        memberId: member_id ? Number(member_id) : null,
+        coachId: coach_id ? Number(coach_id) : null,
+        operatorId: 1,
+      },
+    });
+
+    return res.status(201).json({
+      code: 0,
+      message: '创建财务记录成功',
+      data: financialRecord,
+    });
+  } catch (error) {
+    console.error('创建财务记录失败：', error);
+    return res.status(500).json({
+      code: 500,
+      message: '服务器错误',
+      data: null,
+    });
+  }
+}
+
+// 获取财务记录详情
+export async function getFinancialRecordDetail(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    const recordId = parseInt(id);
+
+    if (isNaN(recordId)) {
+      return res.status(400).json({
+        code: 400,
+        message: '无效的记录ID',
+        data: null,
+      });
+    }
+
+    const record = await prisma.financialRecord.findUnique({
+      where: { id: recordId },
+      include: {
+        member: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        coach: {
+          select: {
+            id: true,
+            realName: true,
+          },
+        },
+        operator: {
+          select: {
+            id: true,
+            realName: true,
+          },
+        },
+      },
+    });
+
+    if (!record) {
+      return res.status(404).json({
+        code: 404,
+        message: '财务记录不存在',
+        data: null,
+      });
+    }
+
+    const formattedRecord = {
+      id: record.id,
+      record_type: record.recordType,
+      amount: parseFloat(record.amount.toString()) || 0,
+      record_date: record.recordDate,
+      payment_method: record.paymentMethod || null,
+      description: record.description,
+      member_id: record.memberId,
+      member_name: record.member?.name || null,
+      coach_id: record.coachId,
+      coach_name: record.coach?.realName || null,
+      operator_id: record.operatorId,
+      operator_name: record.operator?.realName || null,
+      created_at: record.createdAt,
+      updated_at: record.updatedAt,
+    };
+
+    return res.status(200).json({
+      code: 0,
+      message: '获取财务记录详情成功',
+      data: formattedRecord,
+    });
+  } catch (error) {
+    console.error('获取财务记录详情失败：', error);
+    return res.status(500).json({
+      code: 500,
+      message: '服务器错误',
+      data: null,
+    });
+  }
+}
+
+// 更新财务记录
+export async function updateFinancialRecord(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    const { record_type, amount, record_date, payment_method, description, member_id, coach_id } = req.body;
+    const recordId = parseInt(id);
+
+    if (isNaN(recordId)) {
+      return res.status(400).json({
+        code: 400,
+        message: '无效的记录ID',
+        data: null,
+      });
+    }
+
+    if (!record_type || !amount || !record_date) {
+      return res.status(400).json({
+        code: 400,
+        message: '缺少必要参数',
+        data: null,
+      });
+    }
+
+    const existingRecord = await prisma.financialRecord.findUnique({
+      where: { id: recordId },
+    });
+
+    if (!existingRecord) {
+      return res.status(404).json({
+        code: 404,
+        message: '财务记录不存在',
+        data: null,
+      });
+    }
+
+    const updatedRecord = await prisma.financialRecord.update({
+      where: { id: recordId },
+      data: {
+        recordType: record_type,
+        amount: amount.toString(),
+        recordDate: new Date(record_date),
+        paymentMethod: payment_method || null,
+        description: description || null,
+        memberId: member_id || null,
+        coachId: coach_id || null,
+        updatedAt: new Date(),
+      },
+      include: {
+        member: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        coach: {
+          select: {
+            id: true,
+            realName: true,
+          },
+        },
+        operator: {
+          select: {
+            id: true,
+            realName: true,
+          },
+        },
+      },
+    });
+
+    const formattedRecord = {
+      id: updatedRecord.id,
+      record_type: updatedRecord.recordType,
+      amount: parseFloat(updatedRecord.amount.toString()) || 0,
+      record_date: updatedRecord.recordDate,
+      payment_method: updatedRecord.paymentMethod || null,
+      description: updatedRecord.description,
+      member_id: updatedRecord.memberId,
+      member_name: updatedRecord.member?.name || null,
+      coach_id: updatedRecord.coachId,
+      coach_name: updatedRecord.coach?.realName || null,
+      operator_id: updatedRecord.operatorId,
+      operator_name: updatedRecord.operator?.realName || null,
+      created_at: updatedRecord.createdAt,
+      updated_at: updatedRecord.updatedAt,
+    };
+
+    return res.status(200).json({
+      code: 0,
+      message: '更新财务记录成功',
+      data: formattedRecord,
+    });
+  } catch (error) {
+    console.error('更新财务记录失败：', error);
     return res.status(500).json({
       code: 500,
       message: '服务器错误',

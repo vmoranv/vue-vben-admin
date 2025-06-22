@@ -51,3 +51,4 @@ vite.config.ts.*
 .history
 
 .vercel
+apps/back/.env

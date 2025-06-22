@@ -29,64 +29,81 @@ export const useAuthStore = defineStore('auth', () => {
     params: Recordable<any>,
     onSuccess?: () => Promise<void> | void,
   ) {
-    // 异步处理用户登录操作并获取 accessToken
-    let userInfo: null | UserInfo = null;
     try {
       loginLoading.value = true;
-      const { accessToken } = await loginApi(params);
 
-      // 如果成功获取到 accessToken
-      if (accessToken) {
-        accessStore.setAccessToken(accessToken);
+      // 登录请求
+      const loginResult = await loginApi(params);
 
-        // 获取用户信息并存储到 accessStore 中
-        const [fetchUserInfoResult, accessCodes] = await Promise.all([
-          fetchUserInfo(),
-          getAccessCodesApi(),
-        ]);
+      // 成功获取 token
+      if (loginResult?.accessToken) {
+        // 验证令牌格式和有效期
+        try {
+          const tokenParts = loginResult.accessToken.split('.');
+          if (tokenParts.length === 3 && tokenParts[1]) {
+            const payload = JSON.parse(
+              atob(tokenParts[1].replaceAll('-', '+').replaceAll('_', '/')),
+            );
+            const currentTime = Math.floor(Date.now() / 1000);
 
-        userInfo = fetchUserInfoResult;
-
-        userStore.setUserInfo(userInfo);
-        accessStore.setAccessCodes(accessCodes);
-
-        if (accessStore.loginExpired) {
-          accessStore.setLoginExpired(false);
-        } else {
-          onSuccess
-            ? await onSuccess?.()
-            : await router.push(
-                userInfo.homePath || preferences.app.defaultHomePath,
-              );
+            if (currentTime > payload.exp) {
+              console.error('❌ 警告：获取的令牌已经过期！');
+            }
+          } else {
+            console.error('❌ JWT令牌格式无效');
+          }
+        } catch (parseError) {
+          console.error('❌ 令牌格式验证失败:', parseError);
         }
 
-        if (userInfo?.realName) {
-          notification.success({
-            description: `${$t('authentication.loginSuccessDesc')}:${userInfo?.realName}`,
-            duration: 3,
-            message: $t('authentication.loginSuccess'),
-          });
+        accessStore.setAccessToken(loginResult.accessToken);
+
+        // 获取用户信息
+        const userResult = await getUserInfoApi();
+
+        if (userResult) {
+          userStore.setUserInfo(userResult);
+
+          // 获取权限码
+          const accessCodes = await getAccessCodesApi();
+          accessStore.setAccessCodes(accessCodes || []);
+
+          // 获取重定向路径
+          const currentRoute = router.currentRoute.value;
+          const redirectPath = currentRoute.query.redirect
+            ? decodeURIComponent(currentRoute.query.redirect as string)
+            : userResult?.homePath ||
+              preferences.app.defaultHomePath ||
+              '/analytics';
+          await router.replace(redirectPath);
+          if (onSuccess) {
+            await onSuccess();
+          }
         }
+      } else {
+        console.error('❌ 登录响应中没有accessToken');
       }
+    } catch (error) {
+      console.error('💥 登录过程中发生错误:');
+      console.error('  - 错误类型:', error?.constructor?.name);
+      console.error('  - 完整错误对象:', error);
+
+      notification.error({
+        message: $t('sys.login.loginError'),
+        description: (error as any)?.message || $t('sys.login.networkError'),
+      });
     } finally {
       loginLoading.value = false;
     }
-
-    return {
-      userInfo,
-    };
   }
 
   async function logout(redirect: boolean = true) {
     try {
       await logoutApi();
-    } catch {
-      // 不做任何处理
-    }
+    } catch {}
     resetAllStores();
     accessStore.setLoginExpired(false);
 
-    // 回登录页带上当前路由地址
     await router.replace({
       path: LOGIN_PATH,
       query: redirect

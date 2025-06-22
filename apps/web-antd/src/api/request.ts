@@ -31,16 +31,30 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
    * 重新认证逻辑
    */
   async function doReAuthenticate() {
-    console.warn('Access token or refresh token is invalid or expired. ');
+    console.warn('🚨 触发重新认证逻辑');
+    console.warn(
+      '  - 原因: Access token or refresh token is invalid or expired',
+    );
+
     const accessStore = useAccessStore();
     const authStore = useAuthStore();
+
+    console.warn('  - 当前令牌状态:', {
+      hasToken: !!accessStore.accessToken,
+      tokenLength: accessStore.accessToken?.length || 0,
+      isAccessChecked: accessStore.isAccessChecked,
+      loginExpiredMode: preferences.app.loginExpiredMode,
+    });
+
     accessStore.setAccessToken(null);
     if (
       preferences.app.loginExpiredMode === 'modal' &&
       accessStore.isAccessChecked
     ) {
+      console.warn('  - 设置登录过期模态框');
       accessStore.setLoginExpired(true);
     } else {
+      console.warn('  - 执行登出操作');
       await authStore.logout();
     }
   }
@@ -65,8 +79,10 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
     fulfilled: async (config) => {
       const accessStore = useAccessStore();
 
-      config.headers.Authorization = formatToken(accessStore.accessToken);
+      const formattedToken = formatToken(accessStore.accessToken);
+      config.headers.Authorization = formattedToken;
       config.headers['Accept-Language'] = preferences.app.locale;
+
       return config;
     },
   });
@@ -94,10 +110,48 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
   // 通用的错误处理,如果没有进入上面的错误处理逻辑，就会进入这里
   client.addResponseInterceptor(
     errorMessageResponseInterceptor((msg: string, error) => {
-      // 这里可以根据业务进行定制,你可以拿到 error 内的信息进行定制化处理，根据不同的 code 做不同的提示，而不是直接使用 message.error 提示 msg
-      // 当前mock接口返回的错误字段是 error 或者 message
+      // 添加详细的错误调试信息
+      console.error('❌ 请求错误详情:');
+      console.error('  - 错误消息:', msg);
+      console.error('  - 响应状态:', error?.response?.status);
+      console.error('  - 响应数据:', error?.response?.data);
+      console.error('  - 请求URL:', error?.config?.url);
+      console.error('  - 请求方法:', error?.config?.method);
+
+      // 如果是用户信息接口的401错误，提供更详细的分析
+      if (
+        error?.response?.status === 401 &&
+        error?.config?.url?.includes('/auth/user/info')
+      ) {
+        console.error('🔐 用户信息接口认证失败分析:');
+        console.error(
+          '  - 请求头Authorization:',
+          error?.config?.headers?.Authorization,
+        );
+        console.error('  - 后端返回消息:', error?.response?.data?.message);
+        console.error('  - 建议检查后端JWT验证逻辑');
+
+        // 提取JWT信息用于调试
+        const authHeader = error?.config?.headers?.Authorization;
+        if (authHeader && authHeader.startsWith('Bearer ')) {
+          const token = authHeader.slice(7);
+          try {
+            const tokenParts = token.split('.');
+            if (tokenParts.length === 3) {
+              const payload = JSON.parse(
+                atob(tokenParts[1].replaceAll('-', '+').replaceAll('_', '/')),
+              );
+              console.error('  - JWT载荷信息:', payload);
+            }
+          } catch (parseError) {
+            console.error('  - JWT解析错误:', parseError);
+          }
+        }
+      }
+
       const responseData = error?.response?.data ?? {};
       const errorMessage = responseData?.error ?? responseData?.message ?? '';
+
       // 如果没有错误信息，则会根据状态码进行提示
       message.error(errorMessage || msg);
     }),

@@ -172,21 +172,22 @@ model CheckIn {
 
 // 财务记录表
 model FinancialRecord {
-  id          Int      @id @default(autoincrement())
-  recordType  String   @map("record_type") @db.VarChar(50)
-  amount      Decimal  @db.Decimal(10, 2)
-  memberId    Int?     @map("member_id")
-  coachId     Int?     @map("coach_id")
-  recordDate  DateTime @map("record_date") @db.Date
-  description String?  @db.Text
-  operatorId  Int?     @map("operator_id")
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id            Int      @id @default(autoincrement())
+  recordType    String   @map("record_type")
+  amount        Decimal  @db.Decimal(10, 2)
+  recordDate    DateTime @map("record_date") @db.Date
+  description   String?
+  paymentMethod String?  @map("payment_method")
+  memberId      Int?     @map("member_id")
+  coachId       Int?     @map("coach_id")
+  operatorId    Int      @map("operator_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
 
   // 关联关系
   member   Member? @relation(fields: [memberId], references: [id])
   coach    User?   @relation("CoachFinancialRecords", fields: [coachId], references: [id])
-  operator User?   @relation("OperatorFinancialRecords", fields: [operatorId], references: [id])
+  operator User    @relation("OperatorFinancialRecords", fields: [operatorId], references: [id])
 
   @@map("financial_records")
 }

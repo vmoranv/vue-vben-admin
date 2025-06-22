@@ -14,7 +14,6 @@ export async function getMemberList(req: Request, res: Response) {
       status,
     } = req.query;
 
-    // 构建查询条件
     const queryParams: any[] = [];
     const conditions = [];
     let paramIndex = 1;
@@ -43,11 +42,9 @@ export async function getMemberList(req: Request, res: Response) {
       paramIndex++;
     }
 
-    // 构建WHERE子句
     const whereClause =
       conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
-    // 计算总记录数
     const countQuery = `SELECT COUNT(*) as count FROM members ${whereClause}`;
     const countResult = (await prisma.$queryRawUnsafe(
       countQuery,
@@ -55,7 +52,6 @@ export async function getMemberList(req: Request, res: Response) {
     )) as any[];
     const total = Number(countResult[0].count);
 
-    // 查询分页数据
     const offset = (Number(page) - 1) * Number(pageSize);
     const paginationParams = [...queryParams, Number(pageSize), offset];
 
@@ -116,16 +112,34 @@ export async function createMember(req: Request, res: Response) {
       remark,
     } = req.body;
 
-    // 验证必要字段
     if (!name || !phone || !join_date || !expire_date || !membership_type) {
       return res.status(400).json({
         code: 400,
-        message: '缺少必要参数',
+        message:
+          '缺少必要参数：姓名、手机号、入会日期、过期日期、会员类型为必填项',
         data: null,
       });
     }
 
-    // 检查手机号是否已存在
+    const joinDate = new Date(join_date);
+    const expireDate = new Date(expire_date);
+
+    if (isNaN(joinDate.getTime()) || isNaN(expireDate.getTime())) {
+      return res.status(400).json({
+        code: 400,
+        message: '日期格式不正确',
+        data: null,
+      });
+    }
+
+    if (expireDate <= joinDate) {
+      return res.status(400).json({
+        code: 400,
+        message: '过期日期必须晚于入会日期',
+        data: null,
+      });
+    }
+
     const existingMember = await prisma.$queryRaw<any[]>`
       SELECT id FROM members WHERE phone = ${phone}
     `;
@@ -142,8 +156,19 @@ export async function createMember(req: Request, res: Response) {
       INSERT INTO members (
         name, gender, birth_date, phone, email, address,
         join_date, expire_date, membership_type, coach_id, remark
-      ) VALUES (${name}, ${gender}, ${birth_date}, ${phone}, ${email}, ${address}, 
-               ${join_date}, ${expire_date}, ${membership_type}, ${coach_id}, ${remark}) 
+      ) VALUES (
+        ${name}, 
+        ${gender}, 
+        ${birth_date ? new Date(birth_date) : null}, 
+        ${phone}, 
+        ${email}, 
+        ${address}, 
+        ${new Date(join_date)}, 
+        ${new Date(expire_date)}, 
+        ${membership_type}, 
+        ${coach_id}, 
+        ${remark}
+      ) 
       RETURNING *
     `;
 
@@ -181,7 +206,6 @@ export async function updateMember(req: Request, res: Response) {
       remark,
     } = req.body;
 
-    // 验证必要字段
     if (!name || !phone || !join_date || !expire_date || !membership_type) {
       return res.status(400).json({
         code: 400,
@@ -190,7 +214,6 @@ export async function updateMember(req: Request, res: Response) {
       });
     }
 
-    // 检查会员是否存在
     const existingMember = await prisma.$queryRaw<any[]>`
       SELECT id FROM members WHERE id = ${Number(id)}
     `;
@@ -203,7 +226,6 @@ export async function updateMember(req: Request, res: Response) {
       });
     }
 
-    // 检查手机号是否被其他会员使用
     const phoneCheck = await prisma.$queryRaw<any[]>`
       SELECT id FROM members WHERE phone = ${phone} AND id != ${Number(id)}
     `;
@@ -218,10 +240,19 @@ export async function updateMember(req: Request, res: Response) {
 
     const result = await prisma.$queryRaw<any[]>`
       UPDATE members SET
-        name = ${name}, gender = ${gender}, birth_date = ${birth_date}, phone = ${phone}, 
-        email = ${email}, address = ${address}, join_date = ${join_date}, expire_date = ${expire_date},
-        membership_type = ${membership_type}, coach_id = ${coach_id}, 
-        status = ${Number(status)}, remark = ${remark}, updated_at = CURRENT_TIMESTAMP
+        name = ${name}, 
+        gender = ${gender}, 
+        birth_date = ${birth_date ? new Date(birth_date) : null}, 
+        phone = ${phone}, 
+        email = ${email}, 
+        address = ${address}, 
+        join_date = ${new Date(join_date)}, 
+        expire_date = ${new Date(expire_date)},
+        membership_type = ${membership_type}, 
+        coach_id = ${coach_id}, 
+        status = ${Number(status)}, 
+        remark = ${remark}, 
+        updated_at = CURRENT_TIMESTAMP
       WHERE id = ${Number(id)} RETURNING *
     `;
 
@@ -246,8 +277,16 @@ export async function getMemberDetail(req: Request, res: Response) {
     const { id } = req.params;
 
     const result = await prisma.$queryRaw<any[]>`
-      SELECT * FROM members WHERE id = ${Number(id)}
+      SELECT * FROM members WHERE id = ${Number(id)} AND status != 0
     `;
+
+    if (result.length === 0) {
+      return res.status(404).json({
+        code: 404,
+        message: '会员不存在或已被删除',
+        data: null,
+      });
+    }
 
     return res.status(200).json({
       code: 0,
@@ -277,7 +316,6 @@ export async function memberCheckIn(req: Request, res: Response) {
       });
     }
 
-    // 检查会员是否存在且有效
     const memberCheck = await prisma.$queryRaw<any[]>`
       SELECT id, status, expire_date FROM members WHERE id = ${Number(member_id)}
     `;
@@ -321,6 +359,110 @@ export async function memberCheckIn(req: Request, res: Response) {
     });
   } catch (error) {
     console.error('会员签到失败：', error);
+    return res.status(500).json({
+      code: 500,
+      message: '服务器错误',
+      data: null,
+    });
+  }
+}
+
+// 删除会员
+export async function deleteMember(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+
+    const memberCheck = await prisma.$queryRaw<any[]>`
+      SELECT id FROM members WHERE id = ${Number(id)}
+    `;
+
+    if (memberCheck.length === 0) {
+      return res.status(404).json({
+        code: 404,
+        message: '会员不存在',
+        data: null,
+      });
+    }
+
+    await prisma.$queryRaw`
+      DELETE FROM members WHERE id = ${Number(id)}
+    `;
+
+    return res.status(200).json({
+      code: 0,
+      message: '删除会员成功',
+      data: null,
+    });
+  } catch (error) {
+    console.error('删除会员失败：', error);
+    return res.status(500).json({
+      code: 500,
+      message: '服务器错误',
+      data: null,
+    });
+  }
+}
+
+// 获取会员选项列表
+export async function getMemberOptions(req: Request, res: Response) {
+  try {
+    const result = await prisma.$queryRaw<any[]>`
+      SELECT id, name, phone 
+      FROM members 
+      WHERE status = 1 AND expire_date > CURRENT_DATE
+      ORDER BY name ASC
+    `;
+
+    return res.status(200).json({
+      code: 0,
+      message: '获取会员选项成功',
+      data: result,
+    });
+  } catch (error) {
+    console.error('获取会员选项失败：', error);
+    return res.status(500).json({
+      code: 500,
+      message: '服务器错误',
+      data: null,
+    });
+  }
+}
+
+// 通过手机号查找会员
+export async function getMemberByPhone(req: Request, res: Response) {
+  try {
+    const { phone } = req.params;
+
+    if (!phone) {
+      return res.status(400).json({
+        code: 400,
+        message: '缺少手机号参数',
+        data: null,
+      });
+    }
+
+    const member = await prisma.$queryRaw<any[]>`
+      SELECT id, name, phone, status, expire_date, membership_type, created_at
+      FROM members 
+      WHERE phone = ${phone}
+      LIMIT 1
+    `;
+
+    if (member.length === 0) {
+      return res.status(404).json({
+        code: 404,
+        message: '未找到该手机号对应的会员',
+        data: null,
+      });
+    }
+
+    return res.status(200).json({
+      code: 0,
+      message: '查询成功',
+      data: member[0],
+    });
+  } catch (error) {
+    console.error('查询会员失败：', error);
     return res.status(500).json({
       code: 500,
       message: '服务器错误',

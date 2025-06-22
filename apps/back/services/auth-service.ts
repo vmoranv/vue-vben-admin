@@ -1,15 +1,12 @@
-import process from 'node:process';
-
 import bcrypt from 'bcryptjs';
 import { Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 
+import { JWT_CONFIG } from '../config/jwt';
 import prisma from '../utils/db';
 
-const ACCESS_TOKEN_SECRET =
-  process.env.ACCESS_TOKEN_SECRET || 'access_token_secret';
-const REFRESH_TOKEN_SECRET =
-  process.env.REFRESH_TOKEN_SECRET || 'refresh_token_secret';
+const ACCESS_TOKEN_SECRET = JWT_CONFIG.ACCESS_TOKEN_SECRET;
+const REFRESH_TOKEN_SECRET = JWT_CONFIG.REFRESH_TOKEN_SECRET;
 const ACCESS_TOKEN_EXPIRES_IN = '2h';
 const REFRESH_TOKEN_EXPIRES_IN = '7d';
 
@@ -53,7 +50,7 @@ export async function login(req: Request, res: Response) {
     }
 
     const accessToken = jwt.sign(
-      { userId: user.id, username: user.username, role: user.role_name },
+      { id: user.id, username: user.username, role: user.role_name },
       ACCESS_TOKEN_SECRET,
       { expiresIn: ACCESS_TOKEN_EXPIRES_IN },
     );
@@ -88,7 +85,7 @@ export async function login(req: Request, res: Response) {
 
 export async function getUserInfo(req: Request, res: Response) {
   try {
-    const userId = req.user?.id; // 从JWT验证中提取
+    const userId = req.user?.id;
 
     const userResult = await prisma.$queryRaw`
       SELECT users.id, users.username, users.real_name, users.email, users.phone, roles.name as role 
@@ -127,4 +124,36 @@ export async function getUserInfo(req: Request, res: Response) {
       data: null,
     });
   }
+}
+
+export async function getAccessCodes(req: Request, res: Response) {
+  try {
+    const userId = req.user?.id;
+    const userRole = req.user?.role || 'user';
+
+    const codes = await getRolePermissions(userRole);
+
+    return res.status(200).json({
+      code: 0,
+      message: '获取权限码成功',
+      data: codes,
+    });
+  } catch (error) {
+    console.error('获取权限码失败：', error);
+    return res.status(500).json({
+      code: 500,
+      message: '服务器错误',
+      data: null,
+    });
+  }
+}
+
+async function getRolePermissions(role: string): Promise<string[]> {
+  const rolePermissions: Record<string, string[]> = {
+    admin: ['user:create', 'user:read', 'user:update', 'user:delete'],
+    user: ['user:read'],
+    super: ['*'],
+  };
+
+  return rolePermissions[role] || [];
 }

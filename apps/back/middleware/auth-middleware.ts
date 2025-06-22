@@ -1,7 +1,14 @@
+import dotenv from 'dotenv';
 import { NextFunction, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 
-const ACCESS_TOKEN_SECRET = 'access_token_secret';
+import { JWT_CONFIG } from '../config/jwt';
+
+// 使用统一配置
+const ACCESS_TOKEN_SECRET = JWT_CONFIG.ACCESS_TOKEN_SECRET;
+
+// 确保加载环境变量
+dotenv.config({ path: '.env' });
 
 // 扩展Request类型以包含用户信息
 declare global {
@@ -16,6 +23,7 @@ declare global {
 export function verifyToken(req: Request, res: Response, next: NextFunction) {
   try {
     const authHeader = req.headers.authorization;
+
     const token = authHeader && authHeader.split(' ')[1];
 
     if (!token) {
@@ -26,18 +34,17 @@ export function verifyToken(req: Request, res: Response, next: NextFunction) {
       });
     }
 
-    jwt.verify(token, ACCESS_TOKEN_SECRET, (err: any, decoded: any) => {
-      if (err) {
-        return res.status(401).json({
-          code: 401,
-          message: '访问令牌无效或已过期',
-          data: null,
-        });
-      }
-
+    try {
+      const decoded = jwt.verify(token, ACCESS_TOKEN_SECRET) as any;
       req.user = decoded;
       next();
-    });
+    } catch {
+      return res.status(401).json({
+        code: 401,
+        message: '访问令牌无效或已过期',
+        data: null,
+      });
+    }
   } catch (error) {
     console.error('验证令牌失败：', error);
     return res.status(500).json({

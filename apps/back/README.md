@@ -69,24 +69,24 @@ pnpm start
 
 ### 设备管理API
 
-- GET /api/equipment/list - 获取设备列表
-- POST /api/equipment - 添加设备
-- PUT /api/equipment/:id/status - 更新设备状态
-- POST /api/equipment/maintenance - 添加设备维护记录
-- GET /api/equipment/maintenance/:equipment_id - 获取设备维护记录
+- GET /api/modules/equipment/list - 获取设备列表
+- POST /api/modules/equipment - 添加设备
+- PUT /api/modules/equipment/:id/status - 更新设备状态
+- POST /api/modules/equipment/maintenance - 添加设备维护记录
+- GET /api/modules/equipment/maintenance/:equipment_id - 获取设备维护记录
 
 ### 课程管理API
 
-- GET /api/courses/list - 获取课程列表
-- POST /api/courses - 添加课程
-- PUT /api/courses/:id - 更新课程信息
-- PUT /api/courses/:id/cancel - 取消课程
-- POST /api/courses/book - 预约课程
-- POST /api/courses/cancel-booking - 取消预约
-- GET /api/courses/coach-stats - 获取教练课程统计
+- GET /api/modules/courses/list - 获取课程列表
+- POST /api/modules/courses - 添加课程
+- PUT /api/modules/courses/:id - 更新课程信息
+- PUT /api/modules/courses/:id/cancel - 取消课程
+- POST /api/modules/courses/book - 预约课程
+- POST /api/modules/courses/cancel-booking - 取消预约
+- GET /api/modules/courses/coach-stats - 获取教练课程统计
 
 ### 财务管理API
 
-- GET /api/financial/list - 获取财务记录列表
-- POST /api/financial - 添加财务记录
-- GET /api/financial/statistics - 获取财务统计
+- GET /api/modules/financial/list - 获取财务记录列表
+- POST /api/modules/financial - 添加财务记录
+- GET /api/modules/financial/statistics - 获取财务统计
