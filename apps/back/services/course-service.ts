@@ -1,7 +1,6 @@
 import { Request, Response } from 'express';
 
 import prisma from '../utils/db';
-import { Prisma } from '@prisma/client';
 
 // 定义查询结果类型
 interface CourseBookingResult {
@@ -78,8 +77,7 @@ export async function getCourseList(req: Request, res: Response) {
       ${whereClause}
     `;
 
-    let countResult;
-    countResult = await (queryParams.length > 0
+    const countResult = await (queryParams.length > 0
       ? prisma.$queryRaw<[{ count: bigint }]>`${countQuery}`
       : prisma.$queryRaw<[{ count: bigint }]>`
         SELECT COUNT(*) as count FROM courses c
@@ -92,7 +90,7 @@ export async function getCourseList(req: Request, res: Response) {
 
     let result;
     if (queryParams.length > 0) {
-      const paginationParams = [...queryParams, Number(pageSize), offset];
+      const _paginationParams = [...queryParams, Number(pageSize), offset];
       const query = `
         SELECT 
           c.*,
@@ -122,9 +120,9 @@ export async function getCourseList(req: Request, res: Response) {
       `;
     }
 
-    const processedResult = result.map(item => {
+    const processedResult = result.map((item) => {
       const processed = { ...item } as Record<string, any>;
-      Object.keys(processed).forEach(key => {
+      Object.keys(processed).forEach((key) => {
         if (typeof processed[key] === 'bigint') {
           processed[key] = Number(processed[key]);
         }
@@ -157,9 +155,26 @@ export async function getCourseList(req: Request, res: Response) {
 // 添加课程
 export async function createCourse(req: Request, res: Response) {
   try {
-    const { name, coach_id, course_type, start_time, end_time, capacity, price, location, remark } = req.body;
+    const {
+      name,
+      coach_id,
+      course_type,
+      start_time,
+      end_time,
+      capacity,
+      price,
+      location,
+      remark,
+    } = req.body;
 
-    if (!name || !coach_id || !course_type || !start_time || !end_time || !capacity) {
+    if (
+      !name ||
+      !coach_id ||
+      !course_type ||
+      !start_time ||
+      !end_time ||
+      !capacity
+    ) {
       return res.status(400).json({
         code: 400,
         message: '缺少必要参数',
@@ -181,11 +196,11 @@ export async function createCourse(req: Request, res: Response) {
         where: { id: Number(coach_id) },
         include: { role: true },
       });
-      
-      const errorMessage = userExists 
+
+      const errorMessage = userExists
         ? `用户"${userExists.username}"不是教练角色，其当前角色是"${userExists.role?.name}"`
         : '所选教练ID不存在';
-      
+
       return res.status(404).json({
         code: 404,
         message: errorMessage,
@@ -239,7 +254,15 @@ export async function updateCourse(req: Request, res: Response) {
       price,
     } = req.body;
 
-    if (!name || !coach_id || !course_type || !start_time || !end_time || !capacity || price === undefined) {
+    if (
+      !name ||
+      !coach_id ||
+      !course_type ||
+      !start_time ||
+      !end_time ||
+      !capacity ||
+      price === undefined
+    ) {
       return res.status(400).json({
         code: 400,
         message: '缺少必要参数',
@@ -293,7 +316,7 @@ export async function updateCourse(req: Request, res: Response) {
     }
 
     // 更新课程
-    const updatedCourse = await prisma.$queryRaw`
+    const _updatedCourse = await prisma.$queryRaw`
       UPDATE courses SET 
         name = ${name},
         coach_id = ${Number(coach_id)},
@@ -379,91 +402,93 @@ export async function cancelCourse(req: Request, res: Response) {
 export async function bookCourse(req: Request, res: Response) {
   try {
     const { member_id, course_id } = req.body;
-    
+
     if (!member_id || !course_id) {
       return res.status(400).json({
         code: 400,
         message: '缺少必要参数',
-        data: null
+        data: null,
       });
     }
-    
+
     const course = await prisma.course.findUnique({
-      where: { id: Number(course_id) }
+      where: { id: Number(course_id) },
     });
-    
+
     if (!course) {
       return res.status(404).json({
         code: 404,
         message: '课程不存在',
-        data: null
+        data: null,
       });
     }
-    
+
     const now = new Date();
     const bookingDeadlineMinutes = 30;
     const bookingDeadline = new Date(course.startTime);
-    bookingDeadline.setMinutes(bookingDeadline.getMinutes() - bookingDeadlineMinutes);
+    bookingDeadline.setMinutes(
+      bookingDeadline.getMinutes() - bookingDeadlineMinutes,
+    );
 
     if (now >= bookingDeadline) {
       return res.status(400).json({
         code: 400,
         message: `课程即将开始，已超过预约时间（开始前${bookingDeadlineMinutes}分钟截止）`,
-        data: null
+        data: null,
       });
     }
-    
+
     const existingBooking = await prisma.courseBooking.findFirst({
       where: {
         memberId: Number(member_id),
         courseId: Number(course_id),
-        status: 1
-      }
+        status: 1,
+      },
     });
-    
+
     if (existingBooking) {
       return res.status(400).json({
         code: 400,
         message: '您已预约过此课程',
-        data: null
+        data: null,
       });
     }
-    
+
     const bookingCount = await prisma.courseBooking.count({
       where: {
         courseId: Number(course_id),
-        status: 1
-      }
+        status: 1,
+      },
     });
-    
+
     if (bookingCount >= course.capacity) {
       return res.status(400).json({
         code: 400,
         message: '课程预约已满',
-        data: null
+        data: null,
       });
     }
-    
+
     const booking = await prisma.courseBooking.create({
       data: {
         memberId: Number(member_id),
         courseId: Number(course_id),
         bookingTime: new Date(),
-        status: 1
-      }
+        status: 1,
+      },
     });
-    
+
     return res.status(201).json({
       code: 0,
       message: '预约成功',
-      data: booking
+      data: booking,
     });
   } catch (error) {
     console.error('预约课程失败:', error);
     return res.status(500).json({
       code: 500,
       message: '服务器错误',
-      data: null
+      data: null,
     });
   }
 }
@@ -552,7 +577,7 @@ export async function getCoachCourseStats(req: Request, res: Response) {
 
     if (coach_id) {
       whereClause += ` AND c.coach_id = $${paramIndex}`;
-      queryParams.push(coach_id);
+      queryParams.push(Number(coach_id));
       paramIndex++;
     }
 
@@ -588,7 +613,7 @@ export async function getCoachCourseStats(req: Request, res: Response) {
         total_courses DESC
     `;
 
-    const result = await prisma.$queryRaw<any[]>`${query}`;
+    const result = await prisma.$queryRawUnsafe(query, ...queryParams);
 
     return res.status(200).json({
       code: 0,
@@ -608,14 +633,20 @@ export async function getCoachCourseStats(req: Request, res: Response) {
 // 获取课程预约列表
 export async function getCourseBookings(req: Request, res: Response) {
   try {
-    const { page = 1, pageSize = 10, member_name, course_name, status } = req.query;
-    
+    const {
+      page = 1,
+      pageSize = 10,
+      member_name,
+      course_name,
+      status,
+    } = req.query;
+
     const offset = (Number(page) - 1) * Number(pageSize);
     const limit = Number(pageSize);
 
     // 构建查询条件
-    let whereConditions: string[] = ['1=1'];
-    let queryParams: any[] = [];
+    const whereConditions: string[] = ['1=1'];
+    const queryParams: any[] = [];
     let paramIndex = 1;
 
     if (member_name) {
@@ -647,7 +678,10 @@ export async function getCourseBookings(req: Request, res: Response) {
       WHERE ${whereClause}
     `;
 
-    const countResult = await prisma.$queryRawUnsafe(countQuery, ...queryParams);
+    const countResult = await prisma.$queryRawUnsafe(
+      countQuery,
+      ...queryParams,
+    );
     const total = Number((countResult as any)[0]?.count || 0);
 
     // 查询数据列表
@@ -671,10 +705,10 @@ export async function getCourseBookings(req: Request, res: Response) {
     `;
 
     const dataResult = await prisma.$queryRawUnsafe(
-      dataQuery, 
-      ...queryParams, 
-      limit, 
-      offset
+      dataQuery,
+      ...queryParams,
+      limit,
+      offset,
     );
 
     return res.status(200).json({
@@ -685,7 +719,7 @@ export async function getCourseBookings(req: Request, res: Response) {
         pagination: {
           current: Number(page),
           pageSize: Number(pageSize),
-          total: total,
+          total,
         },
       },
     });
@@ -705,30 +739,30 @@ export async function getCoaches(req: Request, res: Response) {
     const coaches = await prisma.user.findMany({
       where: {
         role: {
-          name: 'coach'
+          name: 'coach',
         },
-        status: 1
+        status: 1,
       },
       select: {
         id: true,
         username: true,
         realName: true,
         email: true,
-        phone: true
-      }
+        phone: true,
+      },
     });
-    
+
     return res.status(200).json({
       code: 0,
       message: '获取教练列表成功',
-      data: coaches
+      data: coaches,
     });
   } catch (error) {
     console.error('获取教练列表失败：', error);
     return res.status(500).json({
       code: 500,
       message: '服务器错误',
-      data: null
+      data: null,
     });
   }
 }
@@ -799,8 +833,8 @@ export async function deleteCourse(req: Request, res: Response) {
 
     const existingCourse = await prisma.course.findUnique({
       where: {
-        id: Number(id)
-      }
+        id: Number(id),
+      },
     });
 
     if (!existingCourse) {
@@ -814,8 +848,8 @@ export async function deleteCourse(req: Request, res: Response) {
     const bookings = await prisma.courseBooking.findMany({
       where: {
         courseId: Number(id),
-        status: 1
-      }
+        status: 1,
+      },
     });
 
     if (bookings.length > 0) {
@@ -829,14 +863,14 @@ export async function deleteCourse(req: Request, res: Response) {
     await prisma.$transaction(async (tx) => {
       await tx.courseBooking.deleteMany({
         where: {
-          courseId: Number(id)
-        }
+          courseId: Number(id),
+        },
       });
 
       await tx.course.delete({
         where: {
-          id: Number(id)
-        }
+          id: Number(id),
+        },
       });
     });
 

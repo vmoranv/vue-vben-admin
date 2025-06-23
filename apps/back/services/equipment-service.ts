@@ -9,7 +9,7 @@ export async function getEquipmentList(req: Request, res: Response) {
 
     // 构建查询条件对象
     const whereConditions: any = {};
-    
+
     if (name) {
       whereConditions.name = {
         contains: name as string,
@@ -32,7 +32,7 @@ export async function getEquipmentList(req: Request, res: Response) {
 
     // 查询分页数据
     const offset = (Number(page) - 1) * Number(pageSize);
-    
+
     const result = await prisma.equipment.findMany({
       where: whereConditions,
       orderBy: {
@@ -93,9 +93,9 @@ export async function createEquipment(req: Request, res: Response) {
         type,
         status,
         model,
-        purchaseDate: purchaseDate,
+        purchaseDate: purchaseDate ? new Date(purchaseDate) : null,
         price: price ? Number(price) : null,
-        warrantyExpire: warrantyExpire,
+        warrantyExpire: warrantyExpire ? new Date(warrantyExpire) : null,
         location,
         remark,
       },
@@ -108,73 +108,6 @@ export async function createEquipment(req: Request, res: Response) {
     });
   } catch (error) {
     console.error('添加设备失败：', error);
-    return res.status(500).json({
-      code: 500,
-      message: '服务器错误',
-      data: null,
-    });
-  }
-}
-
-// 更新设备信息
-export async function updateEquipment(req: Request, res: Response) {
-  try {
-    const { id } = req.params;
-    const {
-      name,
-      type,
-      status,
-      model,
-      purchaseDate,
-      price,
-      warrantyExpire,
-      location,
-      remark,
-    } = req.body;
-
-    if (!id || isNaN(Number(id))) {
-      return res.status(400).json({
-        code: 400,
-        message: '无效的设备ID',
-        data: null,
-      });
-    }
-
-    const existingEquipment = await prisma.equipment.findUnique({
-      where: { id: Number(id) },
-    });
-
-    if (!existingEquipment) {
-      return res.status(404).json({
-        code: 404,
-        message: '设备不存在',
-        data: null,
-      });
-    }
-
-    const result = await prisma.equipment.update({
-      where: { id: Number(id) },
-      data: {
-        name,
-        type,
-        status,
-        model,
-        purchaseDate: purchaseDate,
-        price: price ? Number(price) : null,
-        warrantyExpire: warrantyExpire,
-        location,
-        remark,
-        updatedAt: new Date(),
-      },
-    });
-
-    return res.status(200).json({
-      code: 0,
-      message: '更新设备成功',
-      data: result,
-    });
-  } catch (error) {
-    console.error('更新设备失败：', error);
     return res.status(500).json({
       code: 500,
       message: '服务器错误',
@@ -294,7 +227,7 @@ export async function getEquipmentDetail(req: Request, res: Response) {
   try {
     const { id } = req.params;
 
-    if (!id || isNaN(Number(id))) {
+    if (!id || Number.isNaN(Number(id))) {
       return res.status(400).json({
         code: 400,
         message: '无效的设备ID',
@@ -329,13 +262,80 @@ export async function getEquipmentDetail(req: Request, res: Response) {
   }
 }
 
+// 更新设备信息
+export async function updateEquipment(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    const {
+      name,
+      type,
+      status,
+      model,
+      purchaseDate,
+      price,
+      warrantyExpire,
+      location,
+      remark,
+    } = req.body;
+
+    if (!id || Number.isNaN(Number(id))) {
+      return res.status(400).json({
+        code: 400,
+        message: '无效的设备ID',
+        data: null,
+      });
+    }
+
+    const existingEquipment = await prisma.equipment.findUnique({
+      where: { id: Number(id) },
+    });
+
+    if (!existingEquipment) {
+      return res.status(404).json({
+        code: 404,
+        message: '设备不存在',
+        data: null,
+      });
+    }
+
+    const result = await prisma.equipment.update({
+      where: { id: Number(id) },
+      data: {
+        name,
+        type,
+        status,
+        model,
+        purchaseDate: purchaseDate ? new Date(purchaseDate) : undefined,
+        price: price ? Number(price) : undefined,
+        warrantyExpire: warrantyExpire ? new Date(warrantyExpire) : undefined,
+        location,
+        remark,
+        updatedAt: new Date(),
+      },
+    });
+
+    return res.status(200).json({
+      code: 0,
+      message: '更新设备成功',
+      data: result,
+    });
+  } catch (error) {
+    console.error('更新设备失败：', error);
+    return res.status(500).json({
+      code: 500,
+      message: '服务器错误',
+      data: null,
+    });
+  }
+}
+
 // 删除设备
 export async function deleteEquipment(req: Request, res: Response) {
   try {
     const { id } = req.params;
 
     // 验证ID参数
-    if (!id || isNaN(Number(id))) {
+    if (!id || Number.isNaN(Number(id))) {
       return res.status(400).json({
         code: 400,
         message: '无效的设备ID',
@@ -356,6 +356,22 @@ export async function deleteEquipment(req: Request, res: Response) {
       });
     }
 
+    // 检查是否有维护记录
+    const maintenanceRecords = await prisma.$queryRaw<any[]>`
+      SELECT COUNT(*) as count FROM equipment_maintenance 
+      WHERE equipment_id = ${Number(id)}
+    `;
+
+    if (Number(maintenanceRecords[0].count) > 0) {
+      return res.status(400).json({
+        code: 400,
+        message: '该设备存在维护记录，无法删除。请先删除相关维护记录。',
+        data: {
+          maintenanceCount: Number(maintenanceRecords[0].count),
+        },
+      });
+    }
+
     // 删除设备
     await prisma.equipment.delete({
       where: { id: Number(id) },
@@ -368,6 +384,53 @@ export async function deleteEquipment(req: Request, res: Response) {
     });
   } catch (error) {
     console.error('删除设备失败：', error);
+    return res.status(500).json({
+      code: 500,
+      message: '服务器错误',
+      data: null,
+    });
+  }
+}
+
+// 删除维护记录
+export async function deleteMaintenanceRecord(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+
+    // 验证ID参数
+    if (!id || Number.isNaN(Number(id))) {
+      return res.status(400).json({
+        code: 400,
+        message: '无效的维护记录ID',
+        data: null,
+      });
+    }
+
+    // 检查维护记录是否存在
+    const existingRecord = await prisma.equipmentMaintenance.findUnique({
+      where: { id: Number(id) },
+    });
+
+    if (!existingRecord) {
+      return res.status(404).json({
+        code: 404,
+        message: '维护记录不存在',
+        data: null,
+      });
+    }
+
+    // 删除维护记录
+    await prisma.equipmentMaintenance.delete({
+      where: { id: Number(id) },
+    });
+
+    return res.status(200).json({
+      code: 0,
+      message: '删除维护记录成功',
+      data: null,
+    });
+  } catch (error) {
+    console.error('删除维护记录失败：', error);
     return res.status(500).json({
       code: 500,
       message: '服务器错误',

@@ -15,7 +15,8 @@
     "title": "Member Management",
     "list": "Member List",
     "create": "Create Member",
-    "checkin": "Member Checkin"
+    "checkin": "Member Checkin",
+    "edit": "Edit Member"
   },
   "course": {
     "index": "Course List",

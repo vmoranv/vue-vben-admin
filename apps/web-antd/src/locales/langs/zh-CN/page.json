@@ -15,7 +15,8 @@
     "title": "会员管理",
     "list": "会员列表",
     "create": "创建会员",
-    "checkin": "会员签到"
+    "checkin": "会员签到",
+    "edit": "编辑会员"
   },
   "course": {
     "index": "课程列表",

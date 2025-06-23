@@ -1,10 +1,21 @@
 <script lang="ts" setup>
 import { onMounted, ref } from 'vue';
 
-import { Button, Card, Form, Input, message, Descriptions, Avatar } from 'ant-design-vue';
 import { UserOutlined } from '@ant-design/icons-vue';
+import {
+  Avatar,
+  Button,
+  Card,
+  Descriptions,
+  Form,
+  Input,
+  message,
+} from 'ant-design-vue';
 
-import { getMemberByPhoneApi, memberCheckinApi } from '../../api/modules/members';
+import {
+  getMemberByPhoneApi,
+  memberCheckinApi,
+} from '../../api/modules/members';
 
 interface MemberInfo {
   id: number;
@@ -42,7 +53,7 @@ async function searchMember() {
   try {
     searching.value = true;
     const response = await getMemberByPhoneApi(formData.value.memberPhone);
-    
+
     if (response && response.id) {
       memberInfo.value = response;
       showMemberCard.value = true;
@@ -70,7 +81,7 @@ async function handleCheckin() {
 
   try {
     loading.value = true;
-    
+
     // 检查会员状态
     if (memberInfo.value.status !== 1) {
       message.error('该会员状态异常，无法签到');
@@ -86,12 +97,11 @@ async function handleCheckin() {
     }
 
     await memberCheckinApi(memberInfo.value.id);
-    
+
     message.success(`${memberInfo.value.name} 签到成功！`);
-    
+
     // 重置表单和状态
     resetForm();
-    
   } catch (error: any) {
     console.error('签到失败：', error);
     message.error(error.message || '签到失败，请重试');
@@ -114,7 +124,7 @@ function formatDate(dateStr: string) {
 
 // 获取会员状态文本
 function getMemberStatusText(status: number) {
-  const statusMap: Record<number, { text: string; color: string }> = {
+  const statusMap: Record<number, { color: string; text: string }> = {
     1: { text: '正常', color: 'green' },
     0: { text: '停用', color: 'red' },
     2: { text: '冻结', color: 'orange' },
@@ -129,55 +139,38 @@ onMounted(() => {
 
 <template>
   <div class="member-checkin">
-    <Card title="会员签到" style="margin-bottom: 16px;">
-      <Form
-        :model="formData"
-        layout="inline"
-        @finish="searchMember"
-      >
+    <Card title="会员签到" style="margin-bottom: 16px">
+      <Form :model="formData" layout="inline" @finish="searchMember">
         <Form.Item
           label="会员手机号"
           name="memberPhone"
           :rules="[
             { required: true, message: '请输入会员手机号' },
-            { pattern: /^1[3-9]\d{9}$/, message: '请输入正确的手机号格式' }
+            { pattern: /^1[3-9]\d{9}$/, message: '请输入正确的手机号格式' },
           ]"
         >
           <Input
             v-model:value="formData.memberPhone"
             placeholder="请输入会员手机号"
             :maxlength="11"
-            style="width: 200px;"
+            style="width: 200px"
           />
         </Form.Item>
-        
+
         <Form.Item>
-          <Button 
-            type="primary" 
-            html-type="submit" 
-            :loading="searching"
-          >
+          <Button type="primary" html-type="submit" :loading="searching">
             查找会员
           </Button>
-          <Button 
-            style="margin-left: 8px;" 
-            @click="resetForm"
-          >
-            重置
-          </Button>
+          <Button style="margin-left: 8px" @click="resetForm"> 重置 </Button>
         </Form.Item>
       </Form>
     </Card>
 
     <!-- 会员信息展示卡片 -->
     <Card v-if="showMemberCard && memberInfo" title="会员信息">
-      <div style="display: flex; align-items: flex-start; gap: 20px;">
-        <Avatar 
-          :size="80" 
-          :src="memberInfo.avatar"
-          :icon="UserOutlined"
-        />
-        <div style="flex: 1;">
+      <div style="display: flex; align-items: flex-start">
+        <Avatar :size="80" :src="memberInfo.avatar" :icon="UserOutlined" />
+        <div style="flex: 1">
           <Descriptions :column="2" bordered>
             <Descriptions.Item label="姓名">
               {{ memberInfo.name }}
@@ -189,7 +182,9 @@ onMounted(() => {
               {{ memberInfo.membership_type || '普通会员' }}
             </Descriptions.Item>
             <Descriptions.Item label="状态">
-              <span :style="{ color: getMemberStatusText(memberInfo.status).color }">
+              <span
+                :style="{ color: getMemberStatusText(memberInfo.status).color }"
+              >
                 {{ getMemberStatusText(memberInfo.status).text }}
               </span>
             </Descriptions.Item>
@@ -197,10 +192,10 @@ onMounted(() => {
               {{ formatDate(memberInfo.expire_date) }}
             </Descriptions.Item>
           </Descriptions>
-          
-          <div style="margin-top: 16px; text-align: center;">
-            <Button 
-              type="primary" 
+
+          <div style="margin-top: 16px; text-align: center">
+            <Button
+              type="primary"
               size="large"
               :loading="loading"
               @click="handleCheckin"

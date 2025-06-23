@@ -57,13 +57,15 @@ export namespace EquipmentApi {
 
   /** 更新设备参数 */
   export interface UpdateEquipmentParams
-    extends Partial<CreateEquipmentParams> {}
+    extends Partial<CreateEquipmentParams> {
+    id?: number;
+  }
 
   /** 维护记录参数 */
   export interface MaintenanceRecordParams {
     equipment_id: number;
     maintenance_type: string;
-    maintenance_date: string | any;
+    maintenance_date: any | string;
     cost: number;
     description: string;
   }
@@ -74,8 +76,13 @@ export namespace EquipmentApi {
  * @param params 查询参数
  * @returns 设备列表数据
  */
-export function getEquipmentListApi(params: EquipmentApi.GetEquipmentListParams) {
-  return requestClient.get<EquipmentApi.EquipmentListResult>('/equipment/list', { params });
+export function getEquipmentListApi(
+  params: EquipmentApi.GetEquipmentListParams,
+) {
+  return requestClient.get<EquipmentApi.EquipmentListResult>(
+    '/equipment/list',
+    { params },
+  );
 }
 
 /**
@@ -84,7 +91,9 @@ export function getEquipmentListApi(params: EquipmentApi.GetEquipmentListParams)
  * @returns 设备详情
  */
 export function getEquipmentDetailApi(id: number) {
-  return requestClient.get<EquipmentApi.EquipmentInfo>(`/equipment/detail/${id}`);
+  return requestClient.get<EquipmentApi.EquipmentInfo>(
+    `/equipment/detail/${id}`,
+  );
 }
 
 /**
@@ -102,7 +111,10 @@ export function createEquipmentApi(params: EquipmentApi.CreateEquipmentParams) {
  * @param params 设备参数
  * @returns 更新结果
  */
-export function updateEquipmentApi(id: number, params: EquipmentApi.UpdateEquipmentParams) {
+export function updateEquipmentApi(
+  id: number,
+  params: EquipmentApi.UpdateEquipmentParams,
+) {
   return requestClient.put(`/equipment/${id}`, params);
 }
 
@@ -121,7 +133,10 @@ export function deleteEquipmentApi(id: number) {
  * @param params 分页参数
  * @returns 维护记录列表
  */
-export function getMaintenanceRecordsApi(id: number, params?: PaginationParams) {
+export function getMaintenanceRecordsApi(
+  id: number,
+  params?: PaginationParams,
+) {
   return requestClient.get(`/equipment/maintenance/${id}`, { params });
 }
 
@@ -130,6 +145,17 @@ export function getMaintenanceRecordsApi(id: number, params?: PaginationParams) 
  * @param params 维护记录参数
  * @returns 添加结果
  */
-export function addMaintenanceRecordApi(params: EquipmentApi.MaintenanceRecordParams) {
+export function addMaintenanceRecordApi(
+  params: EquipmentApi.MaintenanceRecordParams,
+) {
   return requestClient.post('/equipment/maintenance', params);
+}
+
+/**
+ * 删除维护记录
+ * @param id 维护记录ID
+ * @returns 删除结果
+ */
+export function deleteMaintenanceRecordApi(id: number) {
+  return requestClient.delete(`/equipment/maintenance/${id}`);
 }

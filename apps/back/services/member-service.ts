@@ -124,7 +124,10 @@ export async function createMember(req: Request, res: Response) {
     const joinDate = new Date(join_date);
     const expireDate = new Date(expire_date);
 
-    if (isNaN(joinDate.getTime()) || isNaN(expireDate.getTime())) {
+    if (
+      Number.isNaN(joinDate.getTime()) ||
+      Number.isNaN(expireDate.getTime())
+    ) {
       return res.status(400).json({
         code: 400,
         message: '日期格式不正确',
@@ -339,7 +342,16 @@ export async function memberCheckIn(req: Request, res: Response) {
     }
 
     const now = new Date();
-    if (new Date(member.expire_date) < now) {
+    const expireDate = new Date(member.expire_date);
+
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const memberExpireDate = new Date(
+      expireDate.getFullYear(),
+      expireDate.getMonth(),
+      expireDate.getDate(),
+    );
+
+    if (memberExpireDate < today) {
       return res.status(400).json({
         code: 400,
         message: '会员已过期，请续费后再签到',

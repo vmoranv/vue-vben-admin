@@ -85,7 +85,7 @@ export namespace FinancialApi {
   export interface GetFinancialStatsParams {
     start_date?: string;
     end_date?: string;
-    time_unit?: 'day' | 'week' | 'month';
+    time_unit?: 'day' | 'month' | 'week';
   }
 }
 
@@ -119,8 +119,8 @@ export function createFinancialRecordApi(
 export async function getFinancialRecordDetailApi(id: number) {
   return requestClient.get<{
     code: number;
-    message: string;
     data: FinancialApi.FinancialRecordInfo;
+    message: string;
   }>(`/financial/records/${id}`);
 }
 
@@ -128,7 +128,7 @@ export async function getFinancialRecordDetailApi(id: number) {
  * 删除财务记录
  */
 export function deleteFinancialRecordApi(id: number) {
-  return requestClient.delete<void>(`/financial/records/${id}`);
+  return requestClient.delete(`/financial/records/${id}`);
 }
 
 /**
@@ -146,18 +146,21 @@ export function getFinancialStatsApi(
 /**
  * 更新财务记录
  */
-export async function updateFinancialRecordApi(id: number, data: {
-  record_type: string;
-  amount: number;
-  record_date: string;
-  payment_method?: string;
-  description?: string;
-  member_id?: number | null;
-  coach_id?: number | null;
-}) {
+export async function updateFinancialRecordApi(
+  id: number,
+  data: {
+    amount: number;
+    coach_id?: null | number;
+    description?: string;
+    member_id?: null | number;
+    payment_method?: string;
+    record_date: string;
+    record_type: string;
+  },
+) {
   return requestClient.put<{
     code: number;
-    message: string;
     data: FinancialApi.FinancialRecordInfo;
+    message: string;
   }>(`/financial/records/${id}`, data);
 }

@@ -1,4 +1,4 @@
-import express from 'express';
+import { Router } from 'express';
 
 import { coachOrAdmin, verifyToken } from '../middleware/auth-middleware';
 import {
@@ -6,48 +6,51 @@ import {
   cancelBooking,
   cancelCourse,
   createCourse,
+  deleteCourse,
   getCoachCourseStats,
+  getCoaches,
   getCourseBookings,
   getCourseDetail,
   getCourseList,
   updateCourse,
-  getCoaches,
-  deleteCourse
 } from '../services/course-service';
 
-const router = express.Router();
+const router = Router();
+
+// 所有路由都需要认证
+router.use(verifyToken);
 
 // 获取课程列表
-router.get('/list', verifyToken, getCourseList);
+router.get('/list', getCourseList);
 
 // 获取教练列表
-router.get('/coaches', verifyToken, getCoaches);
+router.get('/coaches', getCoaches);
 
 // 获取课程预约列表
-router.get('/bookings', verifyToken, getCourseBookings);
+router.get('/bookings', getCourseBookings);
 
 // 获取单个课程详情
-router.get('/:id', verifyToken, getCourseDetail);
+router.get('/:id', getCourseDetail);
 
 // 添加课程
-router.post('/', verifyToken, coachOrAdmin, createCourse);
+router.post('/', coachOrAdmin, createCourse);
 
 // 更新课程
-router.put('/:id', verifyToken, coachOrAdmin, updateCourse);
+router.put('/:id', coachOrAdmin, updateCourse);
 
 // 删除课程
-router.delete('/:id', verifyToken, coachOrAdmin, deleteCourse);
+router.delete('/:id', coachOrAdmin, deleteCourse);
 
 // 取消课程
-router.post('/:id/cancel', verifyToken, coachOrAdmin, cancelCourse);
+router.post('/:id/cancel', coachOrAdmin, cancelCourse);
 
 // 预约课程
-router.post('/book', verifyToken, bookCourse);
+router.post('/book', bookCourse);
 
 // 取消预约
-router.post('/cancel-booking', verifyToken, cancelBooking);
+router.post('/cancel-booking', cancelBooking);
 
 // 获取教练课程统计
-router.get('/coach-stats', verifyToken, coachOrAdmin, getCoachCourseStats);
+router.get('/coach-stats', coachOrAdmin, getCoachCourseStats);
 
 export default router;

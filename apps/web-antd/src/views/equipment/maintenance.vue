@@ -1,8 +1,7 @@
 <script lang="ts" setup>
-
 import type { EquipmentApi } from '../../api/modules/equipment';
 
-import { onMounted, reactive, ref } from 'vue';
+import { h, onMounted, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import {
@@ -15,6 +14,7 @@ import {
   InputNumber,
   message,
   Modal,
+  Popconfirm,
   Select,
   Space,
   Table,
@@ -23,10 +23,10 @@ import dayjs from 'dayjs';
 
 import {
   addMaintenanceRecordApi,
+  deleteMaintenanceRecordApi,
   getEquipmentDetailApi,
   getMaintenanceRecordsApi,
 } from '../../api/modules/equipment';
-
 
 defineOptions({ name: 'EquipmentMaintenance' });
 
@@ -65,7 +65,7 @@ const columns = [
     title: '费用',
     dataIndex: 'cost',
     width: 100,
-    customRender: ({ text }: { text: number }) => `${text} 元`,
+    customRender: ({ text }: { text: number }) => `${text || 0} 元`,
   },
   {
     title: '维护描述',
@@ -76,6 +76,35 @@ const columns = [
     title: '记录时间',
     dataIndex: 'created_at',
     width: 150,
+  },
+  {
+    title: '操作',
+    dataIndex: 'action',
+    width: 100,
+    customRender: ({ record }: { record: any }) => [
+      h(
+        Popconfirm,
+        {
+          title: '确定要删除这条维护记录吗？',
+          content: '删除后无法恢复',
+          onConfirm: () => handleDeleteRecord(record.id),
+          okText: '确定',
+          cancelText: '取消',
+        },
+        {
+          default: () =>
+            h(
+              Button,
+              {
+                type: 'link',
+                danger: true,
+                size: 'small',
+              },
+              { default: () => '删除' },
+            ),
+        },
+      ),
+    ],
   },
 ];
 
@@ -117,16 +146,43 @@ function resetForm() {
   formData.description = '';
 }
 
+// 删除维护记录
+async function handleDeleteRecord(recordId: number) {
+  try {
+    await deleteMaintenanceRecordApi(recordId);
+    message.success('删除维护记录成功');
+
+    if (equipmentId.value) {
+      await loadMaintenanceRecords(equipmentId.value);
+    }
+  } catch (error: any) {
+    console.error('删除维护记录失败：', error);
+    message.error(error.response?.data?.message || '删除维护记录失败');
+  }
+}
+
 async function loadEquipmentInfo(id: number) {
   loading.value = true;
   try {
-    const res = await getEquipmentDetailApi(id);
-    equipmentInfo.value = res;
-    loadMaintenanceRecords(id);
-  } catch (error) {
+    const res = (await getEquipmentDetailApi(id)) as unknown as any;
+    if (res && typeof res === 'object') {
+      if ('code' in res && 'data' in res) {
+        if (res.code === 0 && res.data) {
+          equipmentInfo.value = res.data;
+        } else {
+          message.error(res.message || '获取设备信息失败');
+        }
+      } else if ('id' in res && 'name' in res) {
+        equipmentInfo.value = res;
+      } else {
+        message.error('获取设备信息失败：数据格式错误');
+      }
+    } else {
+      message.error('获取设备信息失败：响应数据无效');
+    }
+  } catch (error: any) {
     console.error('获取设备信息失败：', error);
     message.error('获取设备信息失败');
-    router.push('/equipment');
   } finally {
     loading.value = false;
   }
@@ -135,12 +191,25 @@ async function loadEquipmentInfo(id: number) {
 async function loadMaintenanceRecords(id: number) {
   loadingRef.value = true;
   try {
-    const res = await getMaintenanceRecordsApi(id);
-
-    dataSource.value = res || [];
-    pagination.total = res?.length || 0;
-    tableProps.dataSource = dataSource.value;
-  } catch (error) {
+    const res = (await getMaintenanceRecordsApi(id)) as unknown as any;
+    if (res && typeof res === 'object') {
+      if ('code' in res && 'data' in res) {
+        if (res.code === 0) {
+          dataSource.value = res.data || [];
+          tableProps.dataSource = dataSource.value;
+        } else {
+          message.error(res.message || '获取维护记录失败');
+        }
+      } else if (Array.isArray(res)) {
+        dataSource.value = res;
+        tableProps.dataSource = dataSource.value;
+      } else {
+        message.error('获取维护记录失败：数据格式错误');
+      }
+    } else {
+      message.error('获取维护记录失败：响应数据无效');
+    }
+  } catch (error: any) {
     console.error('获取维护记录失败：', error);
     message.error('获取维护记录失败');
   } finally {
@@ -148,194 +217,165 @@ async function loadMaintenanceRecords(id: number) {
   }
 }
 
-function showAddMaintenanceForm() {
-  if (!equipmentId.value) {
-    message.error('未选择设备');
-    return;
-  }
+async function handleSubmit() {
+  try {
+    if (
+      !formData.maintenance_type ||
+      !formData.maintenance_date ||
+      !formData.description
+    ) {
+      message.warning('请填写完整的维护信息');
+      return;
+    }
 
-  formData.equipment_id = equipmentId.value;
+    const params = {
+      ...formData,
+      equipment_id: equipmentId.value!,
+      maintenance_date: formData.maintenance_date,
+      cost: Number(formData.cost) || 0,
+    };
+
+    await addMaintenanceRecordApi(params);
+    message.success('添加维护记录成功');
+
+    showAddForm.value = false;
+    resetForm();
+
+    await loadMaintenanceRecords(equipmentId.value!);
+
+    await loadEquipmentInfo(equipmentId.value!);
+  } catch (error: any) {
+    console.error('添加维护记录失败：', error);
+    message.error(error.response?.data?.message || '添加维护记录失败');
+  }
+}
+
+function handleCancel() {
+  showAddForm.value = false;
+  resetForm();
+}
+
+function handleAdd() {
   showAddForm.value = true;
 }
 
-const formRef = ref();
-
-async function handleAddMaintenance() {
-  try {
-    await formRef.value.validateFields();
-
-    const apiParams = {
-      equipment_id: formData.equipment_id,
-      maintenance_type: formData.maintenance_type,
-      maintenance_date: typeof formData.maintenance_date === 'object' && formData.maintenance_date !== null
-        ? dayjs(formData.maintenance_date).format('YYYY-MM-DD')
-        : formData.maintenance_date,
-      cost: formData.cost,
-      description: formData.description,
-    };
-
-    loading.value = true;
-    
-    try {
-      const res = await addMaintenanceRecordApi(apiParams);
-
-      showAddForm.value = false;
-      
-      resetForm();
-      
-      if (res && res.id) {
-        message.success('添加维护记录成功');
-      } else if (res && res.code !== undefined) {
-        if (res.code === 0) {
-          message.success('添加维护记录成功');
-        } else {
-          message.warning(`操作提示：${res.message || '未知状态'}`);
-        }
-      } else {
-        message.warning('操作完成，但返回状态未知');
-      }
-      
-      if (equipmentId.value) {
-        loadMaintenanceRecords(equipmentId.value);
-      }
-    } catch (apiError) {
-      console.error('API调用出错:', apiError);
-      message.error('网络错误，但数据可能已添加，请刷新页面查看');
-    } finally {
-      loading.value = false;
-    }
-  } catch (validationError) {
-    console.error('表单验证失败:', validationError);
-    message.error('表单数据有误，请检查');
-  }
-}
-
-function handleBack() {
+function goBack() {
   router.push('/equipment');
 }
 
 onMounted(() => {
-  const id = route.query?.id;
+  const id = route.query.id;
   if (id) {
     equipmentId.value = Number(id);
     loadEquipmentInfo(equipmentId.value);
+    loadMaintenanceRecords(equipmentId.value);
   } else {
-    message.error('未指定设备ID');
+    message.error('未提供设备ID');
     router.push('/equipment');
   }
 });
 </script>
 
 <template>
-  <div>
-    <Card>
-      <template #title>设备维护管理</template>
+  <div class="p-4">
+    <!-- 设备信息卡片 -->
+    <Card class="mb-4" title="设备信息" :loading="loading">
+      <Descriptions v-if="equipmentInfo" :column="3" bordered>
+        <Descriptions.Item label="设备名称">
+          {{ equipmentInfo.name }}
+        </Descriptions.Item>
+        <Descriptions.Item label="设备类型">
+          {{ equipmentInfo.type }}
+        </Descriptions.Item>
+        <Descriptions.Item label="设备状态">
+          <span
+            :class="{
+              'text-green-600': equipmentInfo.status === 1,
+              'text-orange-600': equipmentInfo.status === 2,
+              'text-red-600': equipmentInfo.status === 3,
+            }"
+          >
+            {{
+              equipmentInfo.status === 1
+                ? '正常'
+                : equipmentInfo.status === 2
+                  ? '维修中'
+                  : '报废'
+            }}
+          </span>
+        </Descriptions.Item>
+        <Descriptions.Item label="设备型号">
+          {{ equipmentInfo.model || '-' }}
+        </Descriptions.Item>
+        <Descriptions.Item label="位置">
+          {{ equipmentInfo.location || '-' }}
+        </Descriptions.Item>
+        <Descriptions.Item label="购买价格">
+          {{ equipmentInfo.price ? `${equipmentInfo.price} 元` : '-' }}
+        </Descriptions.Item>
+      </Descriptions>
+    </Card>
+
+    <!-- 维护记录卡片 -->
+    <Card title="维护记录">
       <template #extra>
         <Space>
-          <Button @click="handleBack">返回列表</Button>
-          <Button type="primary" @click="showAddMaintenanceForm">
-            添加维护记录
-          </Button>
+          <Button type="primary" @click="handleAdd">添加维护记录</Button>
+          <Button @click="goBack">返回设备列表</Button>
         </Space>
       </template>
 
-      <!-- 设备信息 -->
-      <Descriptions title="设备信息" :column="3" bordered v-if="equipmentInfo">
-        <Descriptions.Item label="设备ID" :span="1">
-          {{ equipmentInfo.id }}
-        </Descriptions.Item>
-        <Descriptions.Item label="设备名称" :span="1">
-          {{ equipmentInfo.name }}
-        </Descriptions.Item>
-        <Descriptions.Item label="设备类型" :span="1">
-          {{ equipmentInfo.type }}
-        </Descriptions.Item>
-        <Descriptions.Item label="状态" :span="1">
-          {{ equipmentInfo.status }}
-        </Descriptions.Item>
-        <Descriptions.Item label="购买日期" :span="1">
-          {{ equipmentInfo.purchaseDate }}
-        </Descriptions.Item>
-        <Descriptions.Item label="价格" :span="1">
-          {{ equipmentInfo.price }} 元
-        </Descriptions.Item>
-      </Descriptions>
-
-      <!-- 维护记录表格 -->
-      <div style="margin-top: 20px">
-        <div
-          class="table-title"
-          style="margin-bottom: 8px; font-size: 16px; font-weight: bold"
-        >
-          维护记录
-        </div>
-        <Table
-          v-bind="tableProps"
-          :loading="loadingRef"
-          @change="handleTableChange"
-        />
-      </div>
-
-      <!-- 添加维护记录表单 -->
-      <Modal
-        v-model:open="showAddForm"
-        title="添加维护记录"
-        @ok="handleAddMaintenance"
-        :confirm-loading="loading"
-      >
-        <Form ref="formRef" layout="vertical" :model="formData">
-          <Form.Item
-            label="维护类型"
-            name="maintenance_type"
-            :rules="[{ required: true, message: '请选择维护类型' }]"
-          >
-            <Select
-              v-model:value="formData.maintenance_type"
-              placeholder="请选择维护类型"
-              style="width: 100%"
-              :options="maintenanceTypeOptions"
-            />
-          </Form.Item>
-
-          <Form.Item
-            label="维护日期"
-            name="maintenance_date"
-            :rules="[{ required: true, message: '请选择维护日期' }]"
-          >
-            <DatePicker
-              v-model:value="formData.maintenance_date"
-              style="width: 100%"
-              value-format="YYYY-MM-DD"
-            />
-          </Form.Item>
-
-          <Form.Item
-            label="维护费用"
-            name="cost"
-            :rules="[{ required: true, message: '请输入维护费用' }]"
-          >
-            <InputNumber
-              v-model:value="formData.cost"
-              style="width: 100%"
-              :min="0"
-              :precision="2"
-              addon-after="元"
-            />
-          </Form.Item>
-
-          <Form.Item
-            label="维护描述"
-            name="description"
-            :rules="[{ required: true, message: '请输入维护描述' }]"
-          >
-            <Input.TextArea
-              v-model:value="formData.description"
-              placeholder="请输入维护描述"
-              :rows="4"
-            />
-          </Form.Item>
-        </Form>
-      </Modal>
+      <Table v-bind="tableProps" @change="handleTableChange" />
     </Card>
+
+    <!-- 添加维护记录模态框 -->
+    <Modal
+      v-model:open="showAddForm"
+      title="添加维护记录"
+      width="600px"
+      @ok="handleSubmit"
+      @cancel="handleCancel"
+    >
+      <Form layout="vertical" class="mt-4">
+        <Form.Item label="维护类型" required>
+          <Select
+            v-model:value="formData.maintenance_type"
+            placeholder="请选择维护类型"
+            :options="maintenanceTypeOptions"
+          />
+        </Form.Item>
+
+        <Form.Item label="维护日期" required>
+          <DatePicker
+            v-model:value="formData.maintenance_date"
+            style="width: 100%"
+            placeholder="请选择维护日期"
+            :disabled-date="
+              (current) => current && current > dayjs().endOf('day')
+            "
+          />
+        </Form.Item>
+
+        <Form.Item label="维护费用">
+          <InputNumber
+            v-model:value="formData.cost"
+            style="width: 100%"
+            placeholder="请输入维护费用"
+            :min="0"
+            :precision="2"
+          />
+        </Form.Item>
+
+        <Form.Item label="维护描述" required>
+          <Input.TextArea
+            v-model:value="formData.description"
+            placeholder="请输入维护描述"
+            :rows="4"
+            :maxlength="500"
+            show-count
+          />
+        </Form.Item>
+      </Form>
+    </Modal>
   </div>
 </template>
