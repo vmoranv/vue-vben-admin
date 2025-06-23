@@ -3,6 +3,12 @@ import type { RouteRecordRaw } from 'vue-router';
 import { mergeRouteModules, traverseTreeValues } from '@vben/utils';
 
 import { coreRoutes, fallbackNotFoundRoute } from './core';
+import course from './modules/course';
+import dashboard from './modules/dashboard';
+import equipment from './modules/equipment';
+import financial from './modules/financial';
+import member from './modules/member';
+import staff from './modules/staff';
 
 const dynamicRouteFiles = import.meta.glob('./modules/**/*.ts', {
   eager: true,
@@ -27,6 +33,12 @@ const routes: RouteRecordRaw[] = [
   ...coreRoutes,
   ...externalRoutes,
   fallbackNotFoundRoute,
+  ...dashboard,
+  ...course,
+  ...equipment,
+  ...financial,
+  ...member,
+  ...staff,
 ];
 
 /** 基本路由列表，这些路由不需要进入权限拦截 */

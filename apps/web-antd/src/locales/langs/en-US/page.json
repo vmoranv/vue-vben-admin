@@ -10,5 +10,69 @@
     "title": "Dashboard",
     "analytics": "Analytics",
     "workspace": "Workspace"
+  },
+  "member": {
+    "title": "Member Management",
+    "list": "Member List",
+    "create": "Create Member",
+    "checkin": "Member Checkin",
+    "edit": "Edit Member"
+  },
+  "course": {
+    "index": "Course List",
+    "title": "Course Management",
+    "list": "Course List",
+    "create": "Create Course",
+    "bookings": "Course Bookings",
+    "edit": "Edit Course"
+  },
+  "equipment": {
+    "title": "Equipment Management",
+    "list": "Equipment List",
+    "create": "Create Equipment",
+    "edit": "Edit Equipment",
+    "maintenance": "Equipment Maintenance"
+  },
+  "financial": {
+    "title": "Financial Management",
+    "index": "Financial Overview",
+    "stats": "Financial Statistics",
+    "create": "Create Financial Record",
+    "edit": "Edit Financial Record",
+    "startDate": "Start Date",
+    "endDate": "End Date",
+    "granularity": "Time Granularity",
+    "query": "Query",
+    "income": "Income",
+    "expense": "Expense",
+    "profit": "Profit",
+    "daily": "Daily",
+    "weekly": "Weekly",
+    "monthly": "Monthly",
+    "yearly": "Yearly",
+    "date": "Date",
+    "startDatePlaceholder": "Please select start date",
+    "endDatePlaceholder": "Please select end date",
+    "totalIncome": "Total Income",
+    "totalExpense": "Total Expense",
+    "totalProfit": "Total Profit",
+    "profitMargin": "Profit Margin"
+  },
+  "staff": {
+    "title": "Staff Management",
+    "list": "Staff List",
+    "create": "Create Staff",
+    "edit": "Edit Staff",
+    "info": "Staff Information",
+    "role": {
+      "admin": "Super Admin",
+      "manager": "Manager",
+      "coach": "Coach",
+      "reception": "Reception"
+    },
+    "status": {
+      "active": "Active",
+      "inactive": "Inactive"
+    }
   }
 }

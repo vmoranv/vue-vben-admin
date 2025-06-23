@@ -1,0 +1,193 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// 角色表
+model Role {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique @db.VarChar(50)
+  description String?  @db.Text
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // 关联关系
+  users User[]
+
+  @@map("roles")
+}
+
+// 用户表
+model User {
+  id       Int     @id @default(autoincrement())
+  username String  @unique @db.VarChar(50)
+  password String  @db.VarChar(255)
+  realName String? @map("real_name") @db.VarChar(100)
+  email    String? @db.VarChar(100)
+  phone    String? @db.VarChar(20)
+  roleId   Int?    @map("role_id")
+  status   Int     @default(1) @db.SmallInt
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // 关联关系
+  role                    Role?                    @relation(fields: [roleId], references: [id])
+  members                 Member[]                 @relation("CoachMembers")
+  courses                 Course[]
+  equipmentMaintenance    EquipmentMaintenance[]
+  financialRecordsAsCoach FinancialRecord[]        @relation("CoachFinancialRecords")
+  financialRecordsAsOperator FinancialRecord[]     @relation("OperatorFinancialRecords")
+
+  @@map("users")
+}
+
+// 会员表
+model Member {
+  id             Int      @id @default(autoincrement())
+  name           String   @db.VarChar(100)
+  gender         String?  @db.VarChar(10)
+  birthDate      DateTime? @map("birth_date") @db.Date
+  phone          String   @db.VarChar(20)
+  email          String?  @db.VarChar(100)
+  address        String?  @db.Text
+  joinDate       DateTime @map("join_date") @db.Date
+  expireDate     DateTime @map("expire_date") @db.Date
+  membershipType String   @map("membership_type") @db.VarChar(50)
+  coachId        Int?     @map("coach_id")
+  status         Int      @default(1) @db.SmallInt
+  remark         String?  @db.Text
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // 关联关系
+  coach           User?             @relation("CoachMembers", fields: [coachId], references: [id])
+  courseBookings  CourseBooking[]
+  checkIns        CheckIn[]
+  financialRecords FinancialRecord[]
+
+  @@map("members")
+}
+
+// 设备表
+model Equipment {
+  id              Int      @id @default(autoincrement())
+  name            String   @db.VarChar(100)
+  type            String   @db.VarChar(50)
+  model           String?  @db.VarChar(100)
+  purchaseDate    DateTime? @map("purchase_date") @db.Date
+  price           Decimal? @db.Decimal(10, 2)
+  status          Int      @default(1) @db.SmallInt
+  warrantyExpire  DateTime? @map("warranty_expire") @db.Date
+  location        String?  @db.VarChar(100)
+  remark          String?  @db.Text
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // 关联关系
+  maintenance EquipmentMaintenance[]
+
+  @@map("equipment")
+}
+
+// 设备维护记录表
+model EquipmentMaintenance {
+  id               Int      @id @default(autoincrement())
+  equipmentId      Int      @map("equipment_id")
+  maintenanceType  String   @map("maintenance_type") @db.VarChar(50)
+  maintenanceDate  DateTime @map("maintenance_date") @db.Date
+  cost             Decimal? @db.Decimal(10, 2)
+  operatorId       Int?     @map("operator_id")
+  status           Int      @default(1) @db.SmallInt
+  description      String?  @db.Text
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // 关联关系
+  equipment Equipment @relation(fields: [equipmentId], references: [id])
+  operator  User?     @relation(fields: [operatorId], references: [id])
+
+  @@map("equipment_maintenance")
+}
+
+// 课程表
+model Course {
+  id                  Int      @id @default(autoincrement())
+  name                String   @db.VarChar(100)
+  coachId             Int?     @map("coach_id")
+  startTime           DateTime @map("start_time") @db.Timestamptz(6)
+  endTime             DateTime @map("end_time") @db.Timestamptz(6)
+  capacity            Int
+  currentParticipants Int      @default(0) @map("current_participants")
+  location            String?  @db.VarChar(100)
+  courseType          String?  @map("course_type") @db.VarChar(50)
+  price               Decimal? @db.Decimal(10, 2)
+  status              Int      @default(1) @db.SmallInt
+  remark              String?  @db.Text
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // 关联关系
+  coach    User?           @relation(fields: [coachId], references: [id])
+  bookings CourseBooking[]
+
+  @@map("courses")
+}
+
+// 会员课程预约表
+model CourseBooking {
+  id          Int      @id @default(autoincrement())
+  memberId    Int      @map("member_id")
+  courseId    Int      @map("course_id")
+  bookingTime DateTime @default(now()) @map("booking_time") @db.Timestamptz(6)
+  status      Int      @default(1) @db.SmallInt
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // 关联关系
+  member Member @relation(fields: [memberId], references: [id])
+  course Course @relation(fields: [courseId], references: [id])
+
+  @@unique([memberId, courseId])
+  @@map("course_bookings")
+}
+
+// 签到记录表
+model CheckIn {
+  id           Int       @id @default(autoincrement())
+  memberId     Int       @map("member_id")
+  checkInTime  DateTime  @default(now()) @map("check_in_time") @db.Timestamptz(6)
+  checkOutTime DateTime? @map("check_out_time") @db.Timestamptz(6)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // 关联关系
+  member Member @relation(fields: [memberId], references: [id])
+
+  @@map("check_ins")
+}
+
+// 财务记录表
+model FinancialRecord {
+  id            Int      @id @default(autoincrement())
+  recordType    String   @map("record_type")
+  amount        Decimal  @db.Decimal(10, 2)
+  recordDate    DateTime @map("record_date") @db.Date
+  description   String?
+  paymentMethod String?  @map("payment_method")
+  memberId      Int?     @map("member_id")
+  coachId       Int?     @map("coach_id")
+  operatorId    Int      @map("operator_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  // 关联关系
+  member   Member? @relation(fields: [memberId], references: [id])
+  coach    User?   @relation("CoachFinancialRecords", fields: [coachId], references: [id])
+  operator User    @relation("OperatorFinancialRecords", fields: [operatorId], references: [id])
+
+  @@map("financial_records")
+}

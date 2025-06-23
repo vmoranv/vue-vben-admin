@@ -123,6 +123,7 @@ function setupAccessGuard(router: Router) {
  * 项目守卫配置
  * @param router
  */
+// 创建路由守卫
 function createRouterGuard(router: Router) {
   /** 通用 */
   setupCommonGuard(router);
